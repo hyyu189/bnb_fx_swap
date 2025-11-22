@@ -131,7 +131,31 @@ contract FXSwapVault is ReentrancyGuard, Ownable {
     /**
      * @notice Adds more collateral to an existing position to improve Health Factor.
      */
-    function addCollateral(uint256 positionId) external payable nonReentrant {
+    function repayPosition(uint256 positionId) external nonReentrant {
+        Position storage pos = positions[positionId];
+        require(pos.isOpen, "Position not open");
+        require(pos.owner == msg.sender, "Not position owner");
+
+        uint256 debtToRepay = pos.debtAmount;
+        uint256 collateralToReturn = pos.collateralAmount;
+
+        // Effects: Update state before interactions
+        pos.isOpen = false;
+        pos.collateralAmount = 0;
+        pos.debtAmount = 0;
+
+        // Interactions
+        // 1. Burn bUSD from user
+        bool success = busd.transferFrom(msg.sender, address(this), debtToRepay);
+        require(success, "bUSD transfer failed");
+        busd.burn(debtToRepay);
+
+        // 2. Return Collateral
+        (bool sent, ) = payable(msg.sender).call{value: collateralToReturn}("");
+        require(sent, "BNB transfer failed");
+
+        emit PositionRepaid(positionId, msg.sender, debtToRepay, collateralToReturn);
+    }
         Position storage pos = positions[positionId];
         require(pos.isOpen, "Position not open");
         require(msg.value > 0, "No value sent");
