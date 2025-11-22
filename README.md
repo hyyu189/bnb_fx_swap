@@ -117,3 +117,9 @@ ETHERSCAN_API_KEY=... (For BscScan verification)
 The project is initialized with Git. A `.gitignore` file is configured to exclude sensitive data and build artifacts:
 *   **Ignored:** `.env` (Private Keys/RPCs), `out/`, `cache/`, `node_modules/`.
 *   **Note:** Always check `.gitignore` before pushing to remote repositories to prevent leaking credentials.
+
+### 5. Troubleshooting
+*   **TypeScript ABI Errors:** If `npm run build` fails with `Type 'string' is not assignable to type '"function"'`, it's due to Wagmi's strict ABI typing vs JSON imports.
+    *   **Fix:** Cast imported JSON ABIs to `any` or `Abi` type from `viem` in `App.tsx`.
+*   **Address Type Errors:** Wagmi requires addresses to be strictly typed as `0x${string}`.
+    *   **Fix:** Cast string constants to `as '0x${string}'`.

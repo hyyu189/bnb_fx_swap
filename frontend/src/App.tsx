@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useBalance, useReadContracts } from 'wagmi';
-import { parseEther, formatEther } from 'viem';
+import { parseEther, formatEther, type Abi } from 'viem';
 import FXSwapVaultABI from './abis/FXSwapVault.json';
 import PriceOracleABI from './abis/PriceOracle.json';
 import bUSDABI from './abis/bUSD.json';
@@ -9,9 +9,9 @@ import bUSDABI from './abis/bUSD.json';
 // ----------------------------------------------------------------
 // CONFIGURATION: Update these addresses after deployment!
 // ----------------------------------------------------------------
-const VAULT_ADDRESS = "0x4c7F24A0f9c8615D98bC984275B5734AA300A765"; // Replace with deployed Vault Address
-const ORACLE_ADDRESS = "0xBCb8a4d759a8A04e1a23259FC6a90aC3D39C21Fa"; // Replace with deployed Oracle Address
-const BUSD_ADDRESS = "0xb3c60Ab43bcc56FB8ac6e87d2C20F7f521C2fbfb";  // Replace with deployed bUSD Address
+const VAULT_ADDRESS = "0x4c7F24A0f9c8615D98bC984275B5734AA300A765" as `0x${string}`; // Replace with deployed Vault Address
+const ORACLE_ADDRESS = "0xBCb8a4d759a8A04e1a23259FC6a90aC3D39C21Fa" as `0x${string}`; // Replace with deployed Oracle Address
+const BUSD_ADDRESS = "0xb3c60Ab43bcc56FB8ac6e87d2C20F7f521C2fbfb" as `0x${string}`;  // Replace with deployed bUSD Address
 
 export default function App() {
   const { address, isConnected } = useAccount();
@@ -21,32 +21,34 @@ export default function App() {
   
   const { data: oraclePrice } = useReadContract({
     address: ORACLE_ADDRESS,
-    abi: PriceOracleABI,
+    abi: PriceOracleABI as Abi,
     functionName: 'getLatestPrice',
     query: { refetchInterval: 10000 } // Refresh every 10s
   });
 
   const { data: busdBalance } = useReadContract({
     address: BUSD_ADDRESS,
-    abi: bUSDABI,
+    abi: bUSDABI as Abi,
     functionName: 'balanceOf',
     args: [address],
     query: { enabled: !!address }
   });
 
-  const { data: positionIds, refetch: refetchIds } = useReadContract({
+  const { data: positionIdsData, refetch: refetchIds } = useReadContract({
     address: VAULT_ADDRESS,
-    abi: FXSwapVaultABI,
+    abi: FXSwapVaultABI as Abi,
     functionName: 'getUserPositions',
     args: [address],
     query: { enabled: !!address }
   });
 
+  const positionIds = positionIdsData as bigint[] | undefined;
+
   // Fetch details for all user positions
   const { data: positionsData, refetch: refetchPositions } = useReadContracts({
     contracts: positionIds?.map((id: bigint) => ({
       address: VAULT_ADDRESS,
-      abi: FXSwapVaultABI,
+      abi: FXSwapVaultABI as Abi,
       functionName: 'positions',
       args: [id],
     })) || [],
@@ -68,7 +70,7 @@ export default function App() {
     if (!collateralAmount || !mintAmount) return;
     writeContract({
       address: VAULT_ADDRESS,
-      abi: FXSwapVaultABI,
+      abi: FXSwapVaultABI as Abi,
       functionName: 'openPosition',
       args: [parseEther(mintAmount), BigInt(duration)],
       value: parseEther(collateralAmount)
@@ -86,7 +88,7 @@ export default function App() {
     // or we add an approve button. Let's add a quick approve button to the card.
     writeContract({
       address: VAULT_ADDRESS,
-      abi: FXSwapVaultABI,
+      abi: FXSwapVaultABI as Abi,
       functionName: 'repayPosition',
       args: [id]
     });
@@ -95,7 +97,7 @@ export default function App() {
   const handleApprove = async () => {
       writeContract({
           address: BUSD_ADDRESS,
-          abi: bUSDABI,
+          abi: bUSDABI as Abi,
           functionName: 'approve',
           args: [VAULT_ADDRESS, parseEther('1000000')] // Approve large amount for demo
       });
@@ -105,7 +107,7 @@ export default function App() {
     if (!liquidateId) return;
     writeContract({
       address: VAULT_ADDRESS,
-      abi: FXSwapVaultABI,
+      abi: FXSwapVaultABI as Abi,
       functionName: 'liquidate',
       args: [BigInt(liquidateId)]
     });
@@ -205,13 +207,13 @@ export default function App() {
           ) : (
             <div className="grid">
                {positionsData?.map((result: any, index: number) => {
-                 const pos = result.result;
+                 const pos = result.result as [string, bigint, bigint, bigint, bigint, boolean] | undefined;
                  if (!pos) return null;
                  // Struct: owner, collateralAmount, debtAmount, startTime, maturityTimestamp, isOpen
-                 const [owner, col, debt, start, maturity, isOpen] = pos;
-                 const id = positionIds[index];
-                 
-                 if (!isOpen) return null; // Skip closed positions if desired, or show them as closed
+                 const [, col, debt, , maturity, isOpen] = pos;
+                 const id = positionIds?.[index];
+
+                 if (!id || !isOpen) return null; // Skip closed positions if desired, or show them as closed
 
                  return (
                    <div key={id.toString()} className="card">
