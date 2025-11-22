@@ -232,7 +232,32 @@ contract FXSwapVault is ReentrancyGuard, Ownable {
         require(pos.isOpen, "Position not open");
         require(pos.owner == msg.sender, "Not position owner");
         require(block.timestamp <= pos.maturityTimestamp, "Position expired");
-        require(addedDuration >= MIN_DURATION, "Duration too short");
+        // Execute Liquidation
+        // Effects: Update state before interactions
+        uint256 remainingCollateral = pos.collateralAmount - rewardCollateral;
+        address owner = pos.owner; // Cache owner before clearing state
+        pos.isOpen = false;
+        pos.debtAmount = 0;
+        pos.collateralAmount = 0;
+
+        // Interactions
+        // 1. Burn bUSD from liquidator
+        bool success = busd.transferFrom(msg.sender, address(this), debtToCover);
+        require(success, "Transfer from liquidator failed");
+        busd.burn(debtToCover);
+
+        // 2. Distribute Collateral
+        // Send seized collateral to liquidator
+        (bool sentLiq, ) = payable(msg.sender).call{value: rewardCollateral}("");
+        require(sentLiq, "Transfer to liquidator failed");
+
+        // Send remainder to original owner
+        if (remainingCollateral > 0) {
+            (bool sentOwner, ) = payable(owner).call{value: remainingCollateral}("");
+            require(sentOwner, "Transfer to owner failed");
+        }
+
+        emit PositionLiquidated(positionId, msg.sender, debtToCover, rewardCollateral);
         require(pos.maturityTimestamp + addedDuration <= block.timestamp + MAX_DURATION, "Exceeds max duration");
 
         // Calculate Fee in BNB
